@@ -1,0 +1,208 @@
+// ============================================================
+// EstateHub — PostgreSQL schema (Prisma ORM)
+// Run: npx prisma migrate dev
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  VILLA
+  CONDO
+  TOWNHOUSE
+  LAND
+  COMMERCIAL
+}
+
+enum PropertyStatus {
+  FOR_SALE
+  FOR_RENT
+  SOLD
+  RENTED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum InquiryStatus {
+  OPEN
+  RESPONDED
+  CLOSED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  phone         String?
+  password      String // bcrypt hash
+  role          Role           @default(CUSTOMER)
+  profileImage  String?
+  emailVerified Boolean        @default(false)
+  refreshTokens RefreshToken[]
+  agent         Agent?
+  bookings      Booking[]
+  favorites     Favorite[]
+  inquiries     Inquiry[]
+  reviews       Review[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Agent {
+  id             String     @id @default(cuid())
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String     @unique
+  experience     Int        @default(0)
+  specialization String?
+  bio            String?
+  rating         Float      @default(0)
+  properties     Property[]
+}
+
+model Property {
+  id          String            @id @default(cuid())
+  title       String
+  description String
+  type        PropertyType
+  status      PropertyStatus    @default(FOR_SALE)
+  price       Decimal           @db.Decimal(12, 2)
+  city        String
+  state       String
+  country     String            @default("USA")
+  address     String
+  bedrooms    Int               @default(0)
+  bathrooms   Int               @default(0)
+  parking     Int               @default(0)
+  area        Int // sqft
+  yearBuilt   Int?
+  latitude    Float?
+  longitude   Float?
+  agent       Agent             @relation(fields: [agentId], references: [id])
+  agentId     String
+  featured    Boolean           @default(false)
+  images      PropertyImage[]
+  amenities   PropertyAmenity[]
+  bookings    Booking[]
+  favorites   Favorite[]
+  inquiries   Inquiry[]
+  reviews     Review[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([city, type, status])
+  @@index([price])
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  imageUrl   String // Cloudinary secure_url
+  publicId   String? // Cloudinary public_id (for deletion)
+}
+
+model Amenity {
+  id         String            @id @default(cuid())
+  name       String            @unique
+  properties PropertyAmenity[]
+}
+
+model PropertyAmenity {
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  amenityId  String
+
+  @@id([propertyId, amenityId])
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  visitDate  DateTime
+  visitTime  String
+  status     BookingStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+
+  @@index([userId])
+  @@index([propertyId, visitDate])
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+
+  @@unique([userId, propertyId])
+}
+
+model Inquiry {
+  id         String        @id @default(cuid())
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId     String?
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  name       String
+  email      String
+  message    String
+  status     InquiryStatus @default(OPEN)
+  createdAt  DateTime      @default(now())
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String
+  rating     Int // 1..5 (validated at API layer)
+  comment    String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, propertyId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
